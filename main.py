@@ -2,247 +2,207 @@ import os
 import nltk
 import time
 from datetime import datetime
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from nltk.stem import PorterStemmer
-from nltk import FreqDist
-from nltk import ngrams
-import numpy as np
-from itertools import chain
-
-nltk.download('punkt')
+import pandas as pd 
+import numpy as np 
+import matplotlib.pyplot as plt
+from scipy.spatial.distance import pdist
+from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
+from sklearn.cluster import KMeans
 
 
-#converting corpus to lower case
-def convert_to_lower(corpus):
-    return corpus.lower()
-
-#merging text sentences
-def clean_and_merge(raw_corpus):
-    print('Text cleaning started ..', end = " ")
-    clean_content = ""
-    for sentence in raw_corpus:
-        sentence = sentence.strip().replace('\n', ' ')
-        clean_content += sentence
-    print('Text cleaning ended')
-    return clean_content
-
-# Converts the input text string into tokens
-def word_tokenizer(corpus):
-    try:
-        print('Tokenization started ..', end = " ")
-        if isinstance(corpus, (bytes, bytearray)):
-            corpus = corpus.decode('utf-8') 
-        corpus_tokens = word_tokenize(corpus)
-        print('Tokenization ended')
-        print('Total count of tokens: ', len(corpus_tokens))
-        return corpus_tokens
-    except Exception as error:
-        print('Error encountered while tokenizing', str(error))
+#Read the data set
+df = pd.read_csv('dailykos.csv')
+print(df.head(3))
+print(df.shape)
 
 
-# Fetches the stop words from 'English' lang in NLTK library
-def get_stopwords():
-    stop_words = set(stopwords.words('english'))
-    print('Count of stop words: ', len(stop_words))
-    print('writing to file started')
-    write_to_file(stop_words, 'Stopwords.txt')
-    # returning fetched stop words
-    return stop_words
+#Compute Euclidean distances
+distances = pdist(df, metric='euclidean')
+dist = linkage(distances, method='ward') 
 
-# Fetches the multilingual stop words from NLTK library
-def get_all_stopwords():
-    # Get all the languages present in the NLTK library.
-    print('Feching global stop words started...', end=' ')
-    languages = stopwords.fileids()
-    
-    global_stop_words = list(chain.from_iterable(stopwords.words(lang) for lang in languages))
-    write_to_file(global_stop_words, 'GlobalStopWords.txt')
-    print('Feching global stop words completed')
-    print('Count of stop words: ', len(global_stop_words))
-    return global_stop_words
-
-
-# code to write out stop words to file
-def write_to_file(stopwords, name):
-    with open(name, 'w') as file:
-        for word in stopwords:
-            file.write(word + '\n')
-
-#processing only text data into tokens
-def process_text_to_tokens(corpus_tokens, stop_words, remove_stopwords):
-    processed_tokens = []
-    try:
-        # performed stemming and without stop words removal
-        if (not(remove_stopwords)):
-            print("No stopword removal.")
-            print('Stemming in progress ...', end = ' ')
-            stemmer = PorterStemmer()
-            stemmed_text_tokens = [stemmer.stem(token) for token in corpus_tokens if token.isalpha()]
-            processed_tokens = stemmed_text_tokens
-            print('Stemming completed.')
-        # performed stemming and stop words removal
-        elif remove_stopwords:
-            print('Stemming and stop word removal in progress ...', end = " ")
-            stemmer = PorterStemmer()
-            stemmed_text_tokens = [stemmer.stem(token) for token in corpus_tokens if token.isalpha() and token not in stop_words]
-            print('Stemming completed.')
-            processed_tokens = stemmed_text_tokens
-        print('Count of processed tokens: ', len(processed_tokens))
-        return processed_tokens
-    except Exception as error:
-        print('Exception occurred while processing text tokens', str(error))
-
-
-# Preprocessing the data
-def preprocessing(raw_corpus, remove_stopwords, global_stopwords):
-    # Step 1: Clean and merge the raw corpus text data.
-    merged_corpus = clean_and_merge(raw_corpus)
-    # Step 2: Convert the merged corpus to lowercase to ensure uniformity.
-    corpus_lowercase = convert_to_lower(merged_corpus)
-    # corpus_punctuation = remove_punctuation(corpus_lowercase)
-    # Step 3: Tokenize the lowercase corpus into individual words.
-    corpus_tokens = word_tokenizer(corpus_lowercase)
-    # Step 4: Initialize stop words English/Global.
-    stop_words = global_stopwords if len(global_stopwords) > 0 else get_stopwords()
-    # Step 5: Process the tokens based on specified options (stemming and stopwords removal).
-    processed_tokens = process_text_to_tokens(corpus_tokens, stop_words, remove_stopwords)
-    # Step 6: Return the processed tokens for further analysis.
-    return processed_tokens
-
-
-def staging(folder_name, remove_stopwords, global_stopwords):
-    print('******** {} stemming , stop-word removal - {} ********'.format(folder_name, remove_stopwords))
-    # Recording the start time for measuring the execution time
-    start_time = datetime.fromtimestamp(time.time())
-    dir_path = os.path.join('/Users/ishumoganti/Downloads', folder_name)
-    raw_corpus = fetch_raw_corpus(dir_path)
-    processed_tokens = preprocessing(raw_corpus, remove_stopwords, global_stopwords)
-    
-    # Return a list containing the start time and the processed tokens
-    return [start_time, processed_tokens]
-
-
-
-#code to crawl through all files in the directory
-def fetch_raw_corpus(dir_path):
-    corpus_list = []
-    print('path is:', dir_path)
-    try:
-        for root, folders, files in os.walk(dir_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                #print('file path is', file_path)
-                content = ''
-                with open(file_path, 'rb') as f:
-                    for sentence in f.readlines():
-                        content += sentence.decode('utf8', 'replace')
-                    corpus_list.append(content)
-        print('returned from here')
-        return corpus_list
-    except Exception as error:
-        print("error is:", error)
-
-#To find out most frequent words
-def frequency_Distribution(processed_tokens, top_word_count):
-    top_words = FreqDist(processed_tokens).most_common(top_word_count)
-    print(top_words)
-
-#code for frequency distribution
-def top_words(processed_tokens, top_word_count, start_time):
-    print('Top {} words: \n'.format(top_word_count))
-    frequency_Distribution(processed_tokens, top_word_count)
-    end_time = datetime.fromtimestamp(time.time())    
-    print('Time taken in sec: ', (end_time - start_time).seconds)
-    print()
-
-
-# Invoking for corpus 1
-[start_time, c1_stemmed_with_stop_words] = staging('Corpus1', False, [])
-print(start_time)
-
-#With Stemming and NO stop word removal.
-top_words(c1_stemmed_with_stop_words, 30, start_time)
-top_words(c1_stemmed_with_stop_words, 50, start_time)
-top_words(c1_stemmed_with_stop_words, 70, start_time)
-
-#With Stemming and with stop word removal.
-[start_time, c1_stemmed_no_stop_words] = staging('Corpus1', True, [])
-
-top_words(c1_stemmed_no_stop_words, 30, start_time)
-top_words(c1_stemmed_no_stop_words, 50, start_time)
-top_words(c1_stemmed_no_stop_words, 70, start_time)
-
-# Invoking for corpus 2
-[start_time, c2_stemmed_with_stop_words] = staging('Corpus2', False, [])
-print(start_time)
-
-#With Stemming and NO stop word removal.
-top_words(c2_stemmed_with_stop_words, 30, start_time)
-top_words(c2_stemmed_with_stop_words, 50, start_time)
-top_words(c2_stemmed_with_stop_words, 70, start_time)
-
-# With Stemming and with stop word removal.
-[start_time, c2_stemmed_no_stop_words] = staging('Corpus2', True, [])
-
-top_words(c2_stemmed_no_stop_words, 30, start_time)
-top_words(c2_stemmed_no_stop_words, 50, start_time)
-top_words(c2_stemmed_no_stop_words, 70, start_time)
-
-
-#This function generates n-grams from the given corpus depending on the value of 'n'.
-def n_grams(processed_tokens, n, words_req):
-    grams = ngrams(processed_tokens, n)
-    print('Top {} {}-grams: \n'.format(words_req, n))
-    frequency_Distribution(list(grams), words_req)
-    print()
-
-#CORPUS1
-# Performed stemming and did not remove stop words
-n_grams(c1_stemmed_with_stop_words, 2, 30)
-n_grams(c1_stemmed_with_stop_words, 2, 50)
-n_grams(c1_stemmed_with_stop_words, 2, 70)
-
-#Performed stemming and removed stop words
-n_grams(c1_stemmed_no_stop_words, 2, 30)
-n_grams(c1_stemmed_no_stop_words, 2, 50)
-n_grams(c1_stemmed_no_stop_words, 2, 70)
-
-#CORPUS 2
-#Performed stemming and did not remove stop words
-n_grams(c2_stemmed_with_stop_words, 2, 30)
-n_grams(c2_stemmed_with_stop_words, 2, 50)
-n_grams(c2_stemmed_with_stop_words, 2, 70)
-
-#Performed stemming and removed stop words
-n_grams(c2_stemmed_no_stop_words, 2, 30)
-n_grams(c2_stemmed_no_stop_words, 2, 50)
-n_grams(c2_stemmed_no_stop_words, 2, 70)
-
-'''
-Up to this point, our focus has been on eliminating stop words specifically from the 'English' language. 
-However, it is conceivable that the text may contain words from other languages, and to address this possibility, 
-we have implemented extra measures to filter out stop words from those foreign languages as well.
-
-Please note that handling the provided excerpts might require more time due to the presence of 
-approximately 1.6 crore tokens and approximately 10,000 stop words that need to be analyzed.
+#Create a dendrogram 
+plt.figure(figsize=(15, 10))
+dendrogram(dist, leaf_font_size=8, leaf_rotation=45)
+plt.title('Dendrogram')
+plt.xlabel('Observations')
+plt.ylabel('Distance')
+plt.show()
 
 '''
 
-# Fetch global stop words 
-global_stopwords = get_all_stopwords()
+Determining the appropriate number of clusters depends on a variety of factors, taking into account the specific attributes 
+of the data at hand. In the case of handling new articles or blog posts, they can be grouped into separate categories based 
+on their content, which might include subjects such as sports, entertainment, and politics. Once these categories have been 
+defined, one can employ different techniques like the elbow method and silhouette score to identify the optimal cluster quantity.
 
-# CORPUS 1
-print('with global stop words removal started\n\n')
-[start_time, c1_stemmed_with_stop_words] = staging('Corpus1', True, global_stopwords)
+'''
 
-# Invoking the functions
-top_words(c1_stemmed_with_stop_words, 30, start_time)
-n_grams(c1_stemmed_with_stop_words, 2, 30)
+# Performed hierarchical clustering with 7 clusters
+hc_clusters = fcluster(dist, 7, criterion='maxclust')
+print(np.unique(hc_clusters))
 
-# CORPUS 2
-[start_time, c2_stemmed_with_stop_words] = staging('Corpus2', True, global_stopwords)
+# Create a new DataFrame with the cluster assignments 
+df_clusters = pd.DataFrame({'Cluster': hc_clusters}) 
+df_clusters = pd.concat([df_clusters, df], axis=1)
+df_clusters
 
-# Invoking the functions
-top_words(c2_stemmed_with_stop_words, 30, start_time)
-n_grams(c2_stemmed_with_stop_words, 2, 30)
+counts = df_clusters['Cluster'].value_counts()
+print(counts)
+
+
+'''
+Q) How many observations are in cluster 3?
+A) There are 803 observations in the cluster 3(output from below output)
+'''
+
+print('Number of observation in cluster 3 are: ', sum(hc_clusters == 3))
+
+'''
+Q) Which cluster has the most observations?
+A) Cluster 2 has most observations from below.
+'''
+
+max_cluster = counts.idxmax()
+print('Most observations are in cluster: ', max_cluster)
+
+'''
+Q) Which cluster has fewest observations?
+A) Cluster 5 has less observations from below.
+'''
+
+min_cluster = counts.idxmin()
+print('Fewest observations are in cluster: ', min_cluster)
+
+'''
+Q) Instead of looking at the average value in each variable individually, we’ll just look at the top 6 words in each cluster. 
+Compute the mean frequency values of each of the words in cluster 1, and 
+then output the 6 words that occur the most frequently.
+A) In cluster number 1, the word 'November' stands out as the most commonly occurring word when considering the average values.
+
+'''
+
+# Filter the data for Cluster 1
+c1 = df_clusters[hc_clusters == 1]
+mean_freq = c1.mean()
+# Sort the words by their mean frequencies in descending order for top 6 words
+sorted_words = mean_freq.sort_values(ascending=False)[:6]
+sorted_words.values
+print(sorted_words)
+
+'''
+Q)Now repeat the command given in the previous problem for each of the other clusters, and answer the following questions.
+'''
+
+## Top 6 words in all 7 clusters
+
+top_cluster_words_df = pd.DataFrame()
+var_names = [f"cluster_{i}" for i in range(1, 8)]
+
+for i in range(1,8):
+    cluster = df_clusters[hc_clusters == i]
+    mean_freq = cluster.mean()
+    top_words = mean_freq.sort_values(ascending=False)[:6] 
+    print('Top words in Cluster: ',i,' are: \n',top_words ) 
+    cluster_name = var_names[i-1]
+    freq_name = f"{var_names[i-1]}_frequency"
+    top_cluster_words_df[cluster_name] = top_words.index.tolist()
+    top_cluster_words_df[freq_name] = top_words.values.tolist()
+
+print(top_cluster_words_df)
+
+'''
+Q) Which cluster could best be described as the cluster related to the Iraq war?
+A) Based on the prominent words found in each cluster's output, it can be inferred that cluster 6 is 
+somewhat more associated with the Iraq war.
+
+Q) In 2004, one of the candidates for the Democratic nomination for the President of the United States was Howard Dean, 
+John Kerry was the candidate who won the democratic nomination, and John Edwards with the running mate of John Kerry 
+(the Vice President nominee). Given this information, which cluster best corresponds to the democratic party?
+A) Cluster 4 contains the highest occurrence of terms such as 'dean,' 'kerry,' 'candidate,' 'democrat,' and 'edward,' 
+suggesting a stronger connection to the Democratic party.
+
+'''
+
+kmeans = KMeans(n_clusters=7, random_state=1000, n_init=150).fit(df)
+clusters = kmeans.predict(df)
+clusters = clusters+1
+
+print(np.unique(clusters))
+
+
+# Create a new DataFrame with the cluster assignments 
+df_clusters2 = pd.DataFrame({'kmeans_Cluster': clusters}) 
+df_clusters2 = pd.concat([df_clusters2, df], axis=1)  
+
+print(df_clusters2.head(3))
+
+kmeans_counts = df_clusters2['kmeans_Cluster'].value_counts()
+print(kmeans_counts)
+
+'''
+Q) How many observations are in cluster 3?
+A) There are 255 observations in the cluster 3(output from below output)
+'''
+
+print('Number of observation in cluster 3 are: ', sum(df_clusters2['kmeans_Cluster'] == 3))
+
+'''
+Q) Which cluster has the most observations?
+A) Cluster 7 has most observations from below.
+'''
+
+max_cluster = kmeans_counts.idxmax()
+print('Most observations are in cluster: ', max_cluster)
+
+'''
+Q) Which cluster has fewest observations?
+A) Cluster 5 has less observations from below.
+'''
+
+min_cluster = kmeans_counts.idxmin()
+print('Fewest observations are in cluster: ', min_cluster)
+
+
+# Displaying 6 most frequent words in each cluster
+
+var_names = [f"cluster_{i}" for i in range(1, 8)]
+top_words_df = pd.DataFrame(columns=var_names)
+for i in range(1, 8):
+    cluster = df_clusters2[clusters == i]
+    mean_freq = cluster.mean()
+    top_words = mean_freq.sort_values(ascending=False)[:6]
+    print('Top words in K-means Cluster: ',i,' are: \n',top_words ) 
+    top_words_df[var_names[i-1]] = top_words.index.tolist()
+
+print(top_words_df)
+
+'''
+
+Q) Which k-means cluster best corresponds to the Iraq War?
+A) Cluster 3
+
+Q) Which k-means cluster best corresponds to the democratic party?
+A) Cluster 2
+
+'''
+
+# Crosstab
+ 
+# Create a DataFrame with the cluster assignments for each method
+df = pd.DataFrame({ 'HC Clusters': hc_clusters, 'K-Means Clusters': df_clusters2['kmeans_Cluster']})
+# Create the cross-tabulation table 
+print(pd.crosstab(df['HC Clusters'], df['K-Means Clusters']))
+
+'''
+Q) Which Hierarchical Cluster best corresponds to K-Means Cluster 2?
+
+A) Hierarchial Cluster 3 correspond to K-Means cluster 2 because they share the highest number of data points 94 according to the output.
+
+'''
+
+'''
+Q) Which Hierarchical Cluster best corresponds to K-Means Cluster 3?
+
+Hierarchial Cluster 6 correspond to K-Means cluster 2 because they share the highest number of data points 174 according to the output.
+
+'''
